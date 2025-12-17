@@ -18,6 +18,35 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # Initialize OpenAI Client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Constants
+TASK_OUTPUT_FORMAT = """
+<b>Описание</b><br>
+[A description of the error. Mention how critical it is based on the count ({count} times) and user impact. Mention the frequency.]<br>
+<br>
+[Describe the context. Where does it happen? What is the likely cause based on the 'culprit' or 'metadata'?]<br>
+<br>
+<b>Предлагаемое решение</b><br>
+[Propose a technical solution or investigation steps. Be specific. If it's a frontend redirect loop, suggest checking routing logic. If it's a backend 500, suggest checking null handling, etc. Use your knowledge of software development to hypothesize a fix.]<br>
+<br>
+<b>Из Sentry</b><br>
+{permalink}
+"""
+
+TASK_PROMPT_TEMPLATE = """
+You are a Senior Technical Lead. Your goal is to create a clear, actionable task for a developer based on a Sentry error report.
+
+Here is the error data from Sentry:
+{issue_json}
+
+Please generate a task description in the EXACT following HTML format (do not use Markdown, use <b> for bold headers and <br> for line breaks):
+
+{output_format}
+
+---
+
+Tone: Professional, slightly informal (like a team lead talking to a dev), direct.
+Language: Russian.
+"""
 
 def get_sentry_issues(limit=5):
     """
@@ -72,37 +101,22 @@ def generate_task_description(issue):
         # but let's start with issue details to save API calls/latency.
     }
 
-    prompt = f"""
-    You are a Senior Technical Lead. Your goal is to create a clear, actionable task for a developer based on a Sentry error report.
-    Here is the error data from Sentry:
-
-    {json.dumps(issue_data, indent=2)}
-
-    Please generate a task description in the EXACT following format:
-    ### Описание
-    [A description of the error. Mention how critical it is based on the count ({issue_data['count']} times) and user impact. Mention the frequency.]
-    [Describe the context. Where does it happen? What is the likely cause based on the 'culprit' or 'metadata'?]
-
-    ### Предлагаемое решение
-    [Propose a technical solution or investigation steps. Be specific. If it's a frontend redirect loop, suggest checking routing logic. If it's a backend 500, suggest checking null handling, etc. Use your knowledge of software development to hypothesize a fix.]
-
-    ### Из Sentry
-    {issue_data['permalink']}
-
-    ---
-
-    Tone: Professional, slightly informal (like a team lead talking to a dev), direct.
-    Language: Russian.
-    """
+    prompt = TASK_PROMPT_TEMPLATE.format(
+        issue_json=json.dumps(issue_data, indent=2),
+        output_format=TASK_OUTPUT_FORMAT.format(
+            count=issue_data['count'],
+            permalink=issue_data['permalink']
+        )
+    )
 
     try:
         response = client.chat.completions.create(
-            model="gpt-5-nano",
+            model="gpt-4o", # Or gpt-3.5-turbo if preferred for cost
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that parses error logs and creates Jira-style tickets."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=1
+            temperature=0.7
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -146,8 +160,9 @@ if st.button("Загрузить и проанализировать"):
             with col2:
                 with st.spinner(f"Analyzing issue {issue.get('shortId')}..."):
                     task_desc = generate_task_description(issue)
-                    st.markdown(task_desc)  
+                    st.markdown(task_desc, unsafe_allow_html=True)
+                    
                     # Copy button (simulated with code block for easy copy)
-                    st.text_area("Raw Markdown (Copy for Tracker)", value=task_desc, height=200, key=f"area_{i}")
+                    st.text_area("Raw HTML (Copy for Tracker)", value=task_desc, height=200, key=f"area_{i}")
     else:
         st.warning("No issues found matching the criteria.")
