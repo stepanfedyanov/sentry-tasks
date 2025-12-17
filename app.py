@@ -48,10 +48,10 @@ Tone: Professional, slightly informal (like a team lead talking to a dev), direc
 Language: Russian.
 """
 
-def get_sentry_issues(limit=5):
+def get_sentry_issues(limit=5, period="14d"):
     """
     Fetches top critical issues from Sentry.
-    Criteria: Active in last 14 days, sorted by frequency (most events).
+    Criteria: Active in last {period}, sorted by frequency (most events).
     """
     if not all([SENTRY_URL, SENTRY_TOKEN, SENTRY_ORG, SENTRY_PROJECT]):
         st.error("Please configure Sentry credentials in .env file")
@@ -64,10 +64,16 @@ def get_sentry_issues(limit=5):
         "Authorization": f"Bearer {SENTRY_TOKEN}",
         "Content-Type": "application/json"
     }
+    # Determine valid statsPeriod based on API limitations ('', '24h', '14d')
+    if period in ["1h", "24h"]:
+        stats_period = "24h"
+    else:
+        stats_period = "14d"
+
     params = {
-        "statsPeriod": "14d",      # Active in last 14 days
+        "statsPeriod": stats_period,
         "sort": "freq",            # Sort by frequency (most events)
-        "query": "is:unresolved is:unassigned", # Only unresolved and unassigned issues
+        "query": f"is:unresolved is:unassigned lastSeen:-{period}", # Only unresolved, unassigned and seen in last {period}
         "limit": limit
     }
 
@@ -148,6 +154,21 @@ with st.sidebar:
         value=1.0,
         step=0.1
     )
+
+    # Time Period Selection
+    period_options = {
+        "Last Hour": "1h",
+        "Last 24 Hours": "24h",
+        "Last 7 Days": "7d",
+        "Last 14 Days": "14d",
+        "Last 30 Days": "30d"
+    }
+    selected_period_label = st.selectbox(
+        "Time Period",
+        list(period_options.keys()),
+        index=3 # Default to 14d
+    )
+    selected_period = period_options[selected_period_label]
     
     st.divider()
     
@@ -165,7 +186,7 @@ num_issues = st.number_input("Количество задач для анали�
 
 if st.button("Загрузить и проанализировать"):
     with st.spinner("Fetching issues from Sentry..."):
-        issues = get_sentry_issues(limit=num_issues)
+        issues = get_sentry_issues(limit=num_issues, period=selected_period)
     if issues:
         st.success(f"Found {len(issues)} issues. Generating tasks with AI...")
         for i, issue in enumerate(issues):
