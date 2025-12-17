@@ -80,7 +80,7 @@ def get_sentry_issues(limit=5):
         return []
 
 
-def generate_task_description(issue):
+def generate_task_description(issue, model, temperature):
     """
     Uses OpenAI to generate a developer task description based on the Sentry issue.
     """
@@ -111,12 +111,12 @@ def generate_task_description(issue):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o", # Or gpt-3.5-turbo if preferred for cost
+            model=model,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that parses error logs and creates Jira-style tickets."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7
+            temperature=temperature
         )
         return response.choices[0].message.content
     except Exception as e:
@@ -132,6 +132,25 @@ st.markdown("Generate developer tasks from top critical Sentry issues.")
 # Sidebar for quick config check
 with st.sidebar:
     st.header("Configuration")
+    
+    # Model Selection
+    model_option = st.selectbox(
+        "OpenAI Model",
+        ("gpt-5.2", "gpt-5-mini", "gpt-5-nano"),
+        index=0
+    )
+    
+    # Temperature Selection
+    temperature = st.slider(
+        "Temperature",
+        min_value=0.0,
+        max_value=2.0,
+        value=1.0,
+        step=0.1
+    )
+    
+    st.divider()
+    
     if SENTRY_URL:
         st.success(f"Sentry URL: {SENTRY_URL}")
     else:
@@ -159,7 +178,7 @@ if st.button("Загрузить и проанализировать"):
                 st.caption(f"Last seen: {issue.get('lastSeen')}")
             with col2:
                 with st.spinner(f"Analyzing issue {issue.get('shortId')}..."):
-                    task_desc = generate_task_description(issue)
+                    task_desc = generate_task_description(issue, model_option, temperature)
                     st.markdown(task_desc, unsafe_allow_html=True)
                     
                     # Copy button (simulated with code block for easy copy)
