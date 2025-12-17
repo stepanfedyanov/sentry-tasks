@@ -38,7 +38,7 @@ def get_sentry_issues(limit=5):
     params = {
         "statsPeriod": "14d",      # Active in last 14 days
         "sort": "freq",            # Sort by frequency (most events)
-        "query": "is:unresolved",  # Only unresolved issues
+        "query": "is:unresolved is:unassigned", # Only unresolved and unassigned issues
         "limit": limit
     }
 
