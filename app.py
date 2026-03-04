@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import json
+import re
 
 # Load environment variables
 load_dotenv()
@@ -46,6 +47,22 @@ Please generate a task description in the EXACT following HTML format (do not us
 
 Tone: Professional, slightly informal (like a team lead talking to a dev), direct.
 Language: Russian.
+"""
+
+TITLE_PROMPT_TEMPLATE = """
+You are a Senior Technical Lead.
+
+Based on this Sentry issue, generate a very short and clear task title in Russian.
+
+Rules:
+- Maximum 80 characters.
+- One line only.
+- No trailing punctuation.
+- If the original error title is already clear, keep it close to original meaning.
+- If original is vague, rewrite into a clearer developer-friendly title.
+
+Sentry issue data:
+{issue_json}
 """
 
 def get_sentry_issues(limit=5, period="14d"):
@@ -128,6 +145,87 @@ def generate_task_description(issue, model, temperature):
     except Exception as e:
         return f"Error generating description: {e}"
 
+
+def is_unclear_title(title):
+    """
+    Heuristic check: whether issue title is too vague for a task title.
+    """
+    if not title:
+        return True
+
+    normalized = title.strip().lower()
+    if len(normalized) < 10:
+        return True
+
+    unclear_patterns = [
+        "unknown error",
+        "unknownexception",
+        "error",
+        "exception",
+        "internal server error",
+        "something went wrong",
+        "request failed",
+    ]
+
+    return normalized in unclear_patterns
+
+
+def generate_task_title(issue, model, temperature):
+    """
+    Returns a short task title:
+    - issue title as-is when it's clear enough
+    - AI-generated short title when issue title is vague
+    """
+    issue_title = (issue.get("title") or "").strip()
+    if not is_unclear_title(issue_title):
+        return issue_title
+
+    issue_data = {
+        "title": issue.get("title"),
+        "culprit": issue.get("culprit"),
+        "metadata": issue.get("metadata", {}),
+        "count": issue.get("count"),
+        "userCount": issue.get("userCount"),
+        "shortId": issue.get("shortId"),
+    }
+
+    prompt = TITLE_PROMPT_TEMPLATE.format(
+        issue_json=json.dumps(issue_data, indent=2)
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You write concise and clear bug-fix task titles.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=min(temperature, 0.7),
+        )
+        generated_title = (response.choices[0].message.content or "").strip()
+        if generated_title:
+            return generated_title.replace("\n", " ")[:80].strip()
+    except Exception:
+        pass
+
+    if issue_title:
+        return issue_title
+    return "Исправить ошибку из Sentry"
+
+
+def html_to_plain_text(text):
+    """
+    Converts basic HTML formatting to plain text with regular line breaks.
+    """
+    plain_text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    plain_text = re.sub(r"(?i)</?b>", "", plain_text)
+    plain_text = re.sub(r"<[^>]+>", "", plain_text)
+    plain_text = re.sub(r"\n{3,}", "\n\n", plain_text)
+    return plain_text.strip()
+
 # --- Streamlit UI ---
 
 st.set_page_config(page_title="Sentry Task Generator", layout="wide")
@@ -199,10 +297,13 @@ if st.button("Загрузить и проанализировать"):
                 st.caption(f"Last seen: {issue.get('lastSeen')}")
             with col2:
                 with st.spinner(f"Analyzing issue {issue.get('shortId')}..."):
+                    task_title = generate_task_title(issue, model_option, temperature)
                     task_desc = generate_task_description(issue, model_option, temperature)
+                    st.text_input("Название задачи", value=task_title, key=f"title_{i}")
                     st.markdown(task_desc, unsafe_allow_html=True)
                     
                     # Copy button (simulated with code block for easy copy)
-                    st.text_area("Raw HTML (Copy for Tracker)", value=task_desc, height=200, key=f"area_{i}")
+                    copy_text = html_to_plain_text(task_desc)
+                    st.text_area("Текст для копирования", value=copy_text, height=200, key=f"area_{i}")
     else:
         st.warning("No issues found matching the criteria.")
