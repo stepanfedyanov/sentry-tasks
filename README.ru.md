@@ -52,6 +52,16 @@ docker compose up
 
 Затем заполните конфигурацию в sidebar. Значения будут сохранены в localStorage браузера и подставятся автоматически при следующих открытиях приложения в том же браузере.
 
+## 🚢 Production deployment
+
+Для деплоя используйте отдельный production compose-файл:
+
+```bash
+docker compose -f docker-compose.production.yml up -d --build
+```
+
+В этом варианте нет bind-mount каталога проекта с хоста, включена политика `restart: unless-stopped`, а также добавлен healthcheck для Streamlit endpoint.
+
 ## 🔒 Безопасность
 
 *   Секреты вводятся через UI и сохраняются в localStorage браузера на текущем устройстве.

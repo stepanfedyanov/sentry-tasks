@@ -54,6 +54,16 @@ After successful startup, open your browser at:
 
 Then fill in the sidebar configuration. The entered values are persisted in the browser localStorage for future visits on the same device/browser profile.
 
+## 🚢 Production Deployment
+
+For deployment, use the production compose file:
+
+```bash
+docker compose -f docker-compose.production.yml up -d --build
+```
+
+This variant does not mount the project directory from the host, runs the container with `restart: unless-stopped`, and includes a healthcheck for the Streamlit endpoint.
+
 ## 💻 Local Development (without Docker)
 
 If you want to run the application locally without Docker:
