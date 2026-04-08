@@ -1,11 +1,13 @@
 services:
   web:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: sentry-tasks-web
+    image: node:20-alpine
+    container_name: sentry-tasks-web-dev
+    working_dir: /app
     ports:
       - "8088:8088"
+    volumes:
+      - ./frontend:/app
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0 --port 8088"]
     restart: unless-stopped
     depends_on:
       api:
@@ -17,14 +19,31 @@ services:
       retries: 3
 
   api:
-    build: .
-    container_name: sentry-tasks-api
-    command: ["uvicorn", "backend.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sentry-tasks-api-dev
+    command:
+      [
+        "uvicorn",
+        "backend.api:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+        "--reload-dir",
+        "/app/backend",
+      ]
     expose:
       - "8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
     environment:
       - CORS_ALLOW_ORIGINS=http://localhost:8088
-      - RATE_LIMIT_MAX_REQUESTS=60
+      - RATE_LIMIT_MAX_REQUESTS=300
       - RATE_LIMIT_WINDOW_SECONDS=60
       - OPENAI_TIMEOUT_SECONDS=40
     restart: unless-stopped

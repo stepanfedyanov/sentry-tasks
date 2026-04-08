@@ -1,14 +1,25 @@
 # Sentry Task Generator
 
-Это приложение на Python (Streamlit), которое автоматизирует процесс создания задач для разработчиков на основе ошибок из Sentry. Оно анализирует топ критичных инцидентов за последние 14 дней и с помощью LLM (ChatGPT) генерирует подробное описание задачи, включая контекст ошибки и предлагаемое решение.
+Это приложение на Python + Vue (Vite), которое автоматизирует процесс создания задач для разработчиков на основе ошибок из Sentry. Оно анализирует топ критичных инцидентов и с помощью LLM генерирует подробное описание задачи с контекстом и предлагаемым решением.
+
+## Архитектура (текущая)
+
+- `web` сервис: nginx, который отдает собранный Vue + Vite frontend (`frontend/src/*`).
+- `api` сервис: FastAPI (`backend/api.py`) для вызовов OpenAI.
+- Поток запросов:
+    1. Браузер напрямую запрашивает Sentry API (по введенным пользователем настройкам).
+    2. Ответ Sentry хранится в браузере.
+    3. Браузер отправляет payload Sentry + ключ OpenAI в backend через nginx-прокси (`POST /api/tasks/generate`).
+    4. Backend возвращает готовые задачи.
 
 ## 🚀 Функциональность
 
-*   **Интеграция с Sentry:** Подключается к вашему Self-hosted (или Cloud) Sentry API.
+*   **Интеграция с Sentry (клиентская):** Браузер напрямую подключается к вашему Self-hosted (или Cloud) Sentry API.
 *   **Анализ ошибок:** Выбирает самые критичные ошибки (сортировка по частоте событий) за последние 2 недели.
-*   **AI-генерация задач:** Использует OpenAI для формирования понятного описания задачи для разработчика.
-*   **Веб-интерфейс:** Удобный UI на Streamlit для выбора количества задач и просмотра результатов.
-*   **Docker:** Полная контейнеризация для быстрого запуска.
+*   **AI-генерация задач:** Backend API использует OpenAI для формирования описания.
+*   **Шифрование настроек в браузере:** Чувствительные данные можно сохранять в localStorage в зашифрованном виде (PBKDF2 + AES-GCM).
+*   **Ограничение нагрузки:** В backend добавлен базовый rate limiting.
+*   **Docker Compose:** Запуск в двух сервисах (`web` + `api`).
 
 ## 🛠 Требования
 
@@ -24,26 +35,8 @@
     cd sentry-tasks
     ```
 
-2.  **Настройте переменные окружения:**
-    Создайте файл `.env` на основе примера:
-    ```bash
-    cp .env.example .env
-    ```
-
-    Откройте файл `.env` и заполните необходимые поля:
-    ```ini
-    # Sentry Configuration
-    SENTRY_URL=https://sentry.your-company.com  # URL вашего Sentry
-    SENTRY_API_TOKEN=your_sentry_auth_token     # Токен с правами project:read, event:read, org:read
-    SENTRY_ORG_SLUG=sentry                      # Название организации (из URL)
-    SENTRY_PROJECT_SLUG=your-project-slug       # Название проекта (из URL)
-
-    # OpenAI Configuration
-    OPENAI_API_KEY=sk-your-openai-api-key       # Ваш ключ OpenAI
-    ```
-
-    > **Как получить Sentry Token:**
-    > Перейдите в User Settings -> API -> Auth Tokens и создайте новый токен.
+2.  **Опционально настройте `.env` для инфраструктурных параметров:**
+    Ключи Sentry/OpenAI теперь вводятся через UI.
 
 ## ▶️ Запуск
 
@@ -54,7 +47,24 @@ docker compose up
 ```
 
 После успешного запуска откройте браузер по адресу:
-**[http://localhost:8501](http://localhost:8501)**
+**[http://localhost:8088](http://localhost:8088)**
+
+Healthcheck API через nginx:
+**[http://localhost:8088/api-health](http://localhost:8088/api-health)**
+
+## 🧪 Docker Compose для разработки
+
+Для режима разработки (монтирование исходников + авто-перезапуск backend):
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+Поведение dev-режима:
+
+- Frontend запускается через Vite dev server (HMR) на `http://localhost:8088`.
+- Backend запускается с `uvicorn --reload` и отслеживает `backend/`.
+- API также доступен на **[http://localhost:8000](http://localhost:8000)** для отладки.
 
 ## 💻 Локальная разработка (без Docker)
 
@@ -71,8 +81,15 @@ docker compose up
     pip install -r requirements.txt
     ```
 
-3.  Запустите Streamlit:
+3.  Запустите API:
     ```bash
-    streamlit run app.py
+    uvicorn backend.api:app --host 0.0.0.0 --port 8000
+    ```
+
+4.  Запустите Vue frontend через Vite:
+    ```bash
+        cd frontend
+        npm install
+        npm run dev -- --host 0.0.0.0 --port 8088
     ```
 

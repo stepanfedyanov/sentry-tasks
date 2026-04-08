@@ -2,15 +2,28 @@
 
 [ru](README.ru.md)
 
-This is a Python (Streamlit) application that automates the process of creating developer tasks based on Sentry errors. It analyzes the top critical incidents from the last 14 days and uses an LLM (ChatGPT) to generate a detailed task description, including error context and suggested solutions.
+This is a Python + Vue (Vite) web application that automates creating developer tasks from Sentry errors. It analyzes top critical incidents and uses an LLM to generate task descriptions with context and proposed solutions.
+
+## Architecture (Current)
+
+- `web` service: Nginx serving built Vue + Vite frontend (`frontend/src/*`).
+- `api` service: FastAPI backend (`backend/api.py`) that talks to OpenAI.
+- Browser flow:
+    1. Browser calls Sentry API directly using user-provided Sentry settings.
+    2. Browser stores Sentry response locally.
+    3. Browser sends Sentry payload + OpenAI key to backend API via nginx proxy (`POST /api/tasks/generate`).
+    4. Backend returns generated tasks.
+
+This design helps when Sentry is reachable from the user's browser (VPN/proxy path) but not from server-side runtime.
 
 ## 🚀 Features
 
-*   **Sentry Integration:** Connects to your Self-hosted (or Cloud) Sentry API.
+*   **Sentry Integration (Client-side):** Browser calls your Self-hosted (or Cloud) Sentry API directly.
 *   **Error Analysis:** Selects the most critical errors (sorted by event frequency) from the last 2 weeks.
-*   **AI Task Generation:** Uses OpenAI to generate clear task descriptions for developers.
-*   **Web Interface:** User-friendly Streamlit UI for selecting the number of tasks and viewing results.
-*   **Docker:** Fully containerized for quick deployment.
+*   **AI Task Generation:** Backend endpoint uses OpenAI to generate clear task descriptions.
+*   **Encrypted Browser Settings:** Sensitive settings can be stored in localStorage encrypted with passphrase (PBKDF2 + AES-GCM).
+*   **Rate limiting:** Backend endpoint includes basic anti-abuse limits.
+*   **Docker Compose:** Two-service setup (`web` + `api`) for simple deployment.
 
 ## 🛠 Requirements
 
@@ -26,26 +39,8 @@ This is a Python (Streamlit) application that automates the process of creating 
     cd sentry-tasks
     ```
 
-2.  **Configure environment variables:**
-    Create a `.env` file based on the example:
-    ```bash
-    cp .env.example .env
-    ```
-
-    Open the `.env` file and fill in the required fields:
-    ```ini
-    # Sentry Configuration
-    SENTRY_URL=https://sentry.your-company.com  # Your Sentry URL
-    SENTRY_API_TOKEN=your_sentry_auth_token     # Token with scopes: project:read, event:read, org:read
-    SENTRY_ORG_SLUG=sentry                      # Organization slug (from URL)
-    SENTRY_PROJECT_SLUG=your-project-slug       # Project slug (from URL)
-
-    # OpenAI Configuration
-    OPENAI_API_KEY=sk-your-openai-api-key       # Your OpenAI API Key
-    ```
-
-    > **How to get a Sentry Token:**
-    > Go to User Settings -> API -> Auth Tokens and create a new token.
+2.  **Optional `.env` setup (mainly for infrastructure settings):**
+    Application keys are entered in the UI, not required in `.env`.
 
 ## ▶️ Running the App
 
@@ -56,7 +51,33 @@ docker compose up
 ```
 
 After successful startup, open your browser at:
-**[http://localhost:8501](http://localhost:8501)**
+**[http://localhost:8088](http://localhost:8088)**
+
+Nginx proxy health endpoint to API:
+**[http://localhost:8088/api-health](http://localhost:8088/api-health)**
+
+## 🧪 Development Compose
+
+For development mode (mounted source + backend auto-reload):
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+Dev mode behavior:
+
+- Frontend runs as Vite dev server with HMR on `http://localhost:8088`.
+- Backend runs with `uvicorn --reload` and watches `backend/`.
+- API is also exposed on **[http://localhost:8000](http://localhost:8000)** for debugging.
+
+## Runtime Environment Variables
+
+Used by the `api` container:
+
+- `CORS_ALLOW_ORIGINS` (default: `http://localhost:8088`)
+- `RATE_LIMIT_MAX_REQUESTS` (default: `60`)
+- `RATE_LIMIT_WINDOW_SECONDS` (default: `60`)
+- `OPENAI_TIMEOUT_SECONDS` (default: `40`)
 
 ## 💻 Local Development (without Docker)
 
@@ -73,13 +94,14 @@ If you want to run the application locally without Docker:
     pip install -r requirements.txt
     ```
 
-3.  Run Streamlit:
+3.  Run API:
     ```bash
-    streamlit run app.py
+    uvicorn backend.api:app --host 0.0.0.0 --port 8000
     ```
 
-## 🔒 Security
-
-*   All secret keys (Sentry tokens, OpenAI API Key) are stored in the `.env` file.
-*   The `.env` file is added to `.gitignore` and **must not** be committed to the repository.
-*   When running via Docker, environment variables are passed into the container without being stored in the image.
+4.  Run Vue frontend with Vite:
+    ```bash
+        cd frontend
+        npm install
+        npm run dev -- --host 0.0.0.0 --port 8088
+    ```
