@@ -4,6 +4,8 @@
 
 This is a Python (Streamlit) application that automates the process of creating developer tasks based on Sentry errors. It analyzes the top critical incidents from the last 14 days and uses an LLM (ChatGPT) to generate a detailed task description, including error context and suggested solutions.
 
+The application is configured directly from the Streamlit sidebar. Sentry and OpenAI credentials are stored in the browser's localStorage on the current device.
+
 ## 🚀 Features
 
 *   **Sentry Integration:** Connects to your Self-hosted (or Cloud) Sentry API.
@@ -26,22 +28,14 @@ This is a Python (Streamlit) application that automates the process of creating 
     cd sentry-tasks
     ```
 
-2.  **Configure environment variables:**
-    Create a `.env` file based on the example:
-    ```bash
-    cp .env.example .env
-    ```
-
-    Open the `.env` file and fill in the required fields:
-    ```ini
-    # Sentry Configuration
-    SENTRY_URL=https://sentry.your-company.com  # Your Sentry URL
-    SENTRY_API_TOKEN=your_sentry_auth_token     # Token with scopes: project:read, event:read, org:read
-    SENTRY_ORG_SLUG=sentry                      # Organization slug (from URL)
-    SENTRY_PROJECT_SLUG=your-project-slug       # Project slug (from URL)
-
-    # OpenAI Configuration
-    OPENAI_API_KEY=sk-your-openai-api-key       # Your OpenAI API Key
+2.  **Prepare credentials for the UI:**
+    You will enter these values in the Streamlit sidebar after startup:
+    ```text
+    SENTRY_URL
+    SENTRY_API_TOKEN
+    SENTRY_ORG_SLUG
+    SENTRY_PROJECT_SLUG
+    OPENAI_API_KEY
     ```
 
     > **How to get a Sentry Token:**
@@ -57,6 +51,8 @@ docker compose up
 
 After successful startup, open your browser at:
 **[http://localhost:8501](http://localhost:8501)**
+
+Then fill in the sidebar configuration. The entered values are persisted in the browser localStorage for future visits on the same device/browser profile.
 
 ## 💻 Local Development (without Docker)
 
@@ -80,6 +76,6 @@ If you want to run the application locally without Docker:
 
 ## 🔒 Security
 
-*   All secret keys (Sentry tokens, OpenAI API Key) are stored in the `.env` file.
-*   The `.env` file is added to `.gitignore` and **must not** be committed to the repository.
-*   When running via Docker, environment variables are passed into the container without being stored in the image.
+*   Secret keys are entered in the UI and stored in the browser localStorage on the current device.
+*   Do not use this app in an untrusted browser profile or on a shared machine if you do not want credentials to remain available there.
+*   The Docker image does not bake credentials into the container.

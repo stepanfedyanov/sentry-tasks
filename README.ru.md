@@ -2,6 +2,8 @@
 
 Это приложение на Python (Streamlit), которое автоматизирует процесс создания задач для разработчиков на основе ошибок из Sentry. Оно анализирует топ критичных инцидентов за последние 14 дней и с помощью LLM (ChatGPT) генерирует подробное описание задачи, включая контекст ошибки и предлагаемое решение.
 
+Настройка приложения выполняется прямо из sidebar в Streamlit. Креденшелы Sentry и OpenAI сохраняются в localStorage браузера на текущем устройстве.
+
 ## 🚀 Функциональность
 
 *   **Интеграция с Sentry:** Подключается к вашему Self-hosted (или Cloud) Sentry API.
@@ -24,22 +26,14 @@
     cd sentry-tasks
     ```
 
-2.  **Настройте переменные окружения:**
-    Создайте файл `.env` на основе примера:
-    ```bash
-    cp .env.example .env
-    ```
-
-    Откройте файл `.env` и заполните необходимые поля:
-    ```ini
-    # Sentry Configuration
-    SENTRY_URL=https://sentry.your-company.com  # URL вашего Sentry
-    SENTRY_API_TOKEN=your_sentry_auth_token     # Токен с правами project:read, event:read, org:read
-    SENTRY_ORG_SLUG=sentry                      # Название организации (из URL)
-    SENTRY_PROJECT_SLUG=your-project-slug       # Название проекта (из URL)
-
-    # OpenAI Configuration
-    OPENAI_API_KEY=sk-your-openai-api-key       # Ваш ключ OpenAI
+2.  **Подготовьте данные для ввода в UI:**
+    После запуска приложения введите в sidebar следующие параметры:
+    ```text
+    SENTRY_URL
+    SENTRY_API_TOKEN
+    SENTRY_ORG_SLUG
+    SENTRY_PROJECT_SLUG
+    OPENAI_API_KEY
     ```
 
     > **Как получить Sentry Token:**
@@ -55,6 +49,14 @@ docker compose up
 
 После успешного запуска откройте браузер по адресу:
 **[http://localhost:8501](http://localhost:8501)**
+
+Затем заполните конфигурацию в sidebar. Значения будут сохранены в localStorage браузера и подставятся автоматически при следующих открытиях приложения в том же браузере.
+
+## 🔒 Безопасность
+
+*   Секреты вводятся через UI и сохраняются в localStorage браузера на текущем устройстве.
+*   Не используйте общий браузерный профиль или чужой компьютер, если не хотите оставлять в нем ключи.
+*   Docker-образ не содержит креденшелы внутри себя.
 
 ## 💻 Локальная разработка (без Docker)
 
